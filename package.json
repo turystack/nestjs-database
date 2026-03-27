@@ -31,11 +31,13 @@
 		"type": "git",
 		"url": "https://github.com/turystack/nestjs-database.git"
 	},
+	"dependencies": {
+		"drizzle-orm": "^0.44.0"
+	},
 	"peerDependencies": {
 		"@nestjs/common": "^11.0.0",
 		"@nestjs/core": "^11.0.0",
 		"better-sqlite3": "^11.0.0",
-		"drizzle-orm": "^0.44.0",
 		"mysql2": "^3.0.0",
 		"pg": "^8.0.0",
 		"reflect-metadata": "^0.2.0"
@@ -60,7 +62,6 @@
 		"@types/pg": "^8.0.0",
 		"@vitest/coverage-v8": "^2.1.0",
 		"better-sqlite3": "^11.0.0",
-		"drizzle-orm": "^0.44.0",
 		"pg": "^8.0.0",
 		"reflect-metadata": "^0.2.2",
 		"tsc-alias": "^1.8.16",

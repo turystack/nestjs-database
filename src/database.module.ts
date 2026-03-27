@@ -19,6 +19,7 @@ export class DatabaseModule {
 	): DynamicModule {
 		return {
 			exports: [
+				DatabaseService,
 				DATABASE_SERVICE,
 			],
 			module: DatabaseModule,
@@ -31,17 +32,43 @@ export class DatabaseModule {
 	): Provider[] {
 		return [
 			{
-				provide: DATABASE_SERVICE,
+				provide: DatabaseService,
 				useFactory: () => {
 					const { db, strategy } = createDrizzleClient(options)
 					registerDb(db)
 
-					const builder = createSchemaBuilder()
-					const resolverResult = options.schemaResolver(builder)
-					const schema = materializeSchema(options.adapter, resolverResult)
+					let schema: Record<string, unknown>
+
+					switch (options.adapter) {
+						case 'postgresql': {
+							schema = materializeSchema(
+								'postgresql',
+								options.schemaResolver(createSchemaBuilder('postgresql')),
+							)
+							break
+						}
+						case 'mysql': {
+							schema = materializeSchema(
+								'mysql',
+								options.schemaResolver(createSchemaBuilder('mysql')),
+							)
+							break
+						}
+						case 'sqlite': {
+							schema = materializeSchema(
+								'sqlite',
+								options.schemaResolver(createSchemaBuilder('sqlite')),
+							)
+							break
+						}
+					}
 
 					return new DatabaseService(db, schema, strategy)
 				},
+			},
+			{
+				provide: DATABASE_SERVICE,
+				useExisting: DatabaseService,
 			},
 		]
 	}
