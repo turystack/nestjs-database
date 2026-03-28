@@ -11,11 +11,29 @@ export type {
 	ResolvedDatabase,
 } from '@/database.types.js'
 
-export { TableRepository } from '@/repository/table-repository.js'
+export type {
+	MaterializeSchema,
+	MaterializeSchemaWithRelations,
+} from '@/drizzle/schema-builder.drizzle.js'
+export {
+	createSchemaBuilder,
+	materializeSchema,
+} from '@/drizzle/schema-builder.drizzle.js'
+export type {
+	ColumnMap,
+	PgSchemaBuilder,
+	RelationsHelpers,
+	RelationsResolverResult,
+	SchemaBuilder,
+	SchemaResolverResult,
+} from '@/drizzle/schema-builder.types.drizzle.js'
+export type { IsolationLevel } from '@/drizzle/transactional.drizzle.js'
+export { Transactional } from '@/drizzle/transactional.drizzle.js'
 export {
 	RecordNotCreatedError,
 	RecordNotFoundError,
 } from '@/repository/table-repository.errors.js'
+export { TableRepository } from '@/repository/table-repository.js'
 export type {
 	CountOptions,
 	CreateInput,
@@ -37,19 +55,3 @@ export type {
 	WhereInput,
 	WhereOperators,
 } from '@/repository/table-repository.types.js'
-
-export { createSchemaBuilder, materializeSchema } from '@/drizzle/schema-builder.drizzle.js'
-export type {
-	MaterializeSchema,
-	MaterializeSchemaWithRelations,
-} from '@/drizzle/schema-builder.drizzle.js'
-export type {
-	ColumnMap,
-	PgSchemaBuilder,
-	RelationsHelpers,
-	RelationsResolverResult,
-	SchemaBuilder,
-	SchemaResolverResult,
-} from '@/drizzle/schema-builder.types.drizzle.js'
-export type { IsolationLevel } from '@/drizzle/transactional.drizzle.js'
-export { Transactional } from '@/drizzle/transactional.drizzle.js'
