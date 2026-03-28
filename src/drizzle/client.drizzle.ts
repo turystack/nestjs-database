@@ -67,7 +67,10 @@ class SqliteStrategy implements AdapterStrategy {
 	}
 }
 
-export async function createDrizzleClient(options: DatabaseModuleOptions): Promise<{
+export async function createDrizzleClient(
+	options: DatabaseModuleOptions,
+	schema: Record<string, unknown>,
+): Promise<{
 	db: unknown
 	strategy: AdapterStrategy
 }> {
@@ -75,14 +78,14 @@ export async function createDrizzleClient(options: DatabaseModuleOptions): Promi
 		case 'postgresql': {
 			const { drizzle } = await import('drizzle-orm/node-postgres')
 			return {
-				db: drizzle(options.postgresql.url),
+				db: drizzle(options.postgresql.url, { schema }),
 				strategy: new PostgresqlStrategy(),
 			}
 		}
 		case 'mysql': {
 			const { drizzle } = await import('drizzle-orm/mysql2')
 			return {
-				db: drizzle(options.mysql.url),
+				db: drizzle(options.mysql.url, { schema, mode: 'default' }),
 				strategy: new MysqlStrategy(),
 			}
 		}
@@ -90,7 +93,7 @@ export async function createDrizzleClient(options: DatabaseModuleOptions): Promi
 			const { drizzle } = await import('drizzle-orm/better-sqlite3')
 			const Database = (await import('better-sqlite3')).default
 			return {
-				db: drizzle(new Database(options.sqlite.url)),
+				db: drizzle(new Database(options.sqlite.url), { schema }),
 				strategy: new SqliteStrategy(),
 			}
 		}

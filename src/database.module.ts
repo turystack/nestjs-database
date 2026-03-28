@@ -34,9 +34,6 @@ export class DatabaseModule {
 			{
 				provide: DatabaseService,
 				useFactory: async () => {
-					const { db, strategy } = await createDrizzleClient(options)
-					registerDb(db)
-
 					let schema: Record<string, unknown>
 
 					switch (options.adapter) {
@@ -62,6 +59,9 @@ export class DatabaseModule {
 							break
 						}
 					}
+
+					const { db, strategy } = await createDrizzleClient(options, schema)
+					registerDb(db)
 
 					return new DatabaseService(db, schema, strategy)
 				},

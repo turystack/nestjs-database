@@ -3,6 +3,7 @@ export * from '@/database.module.js'
 export * from '@/database.service.js'
 export * from '@/database.types.js'
 
+export type { MaterializeSchema } from '@/drizzle/schema-builder.drizzle.js'
 export type {
 	ColumnMap,
 	SchemaBuilder,

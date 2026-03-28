@@ -1,3 +1,4 @@
+import type { ColumnBuilderBase } from 'drizzle-orm'
 import type * as MysqlCore from 'drizzle-orm/mysql-core'
 import type * as PgCore from 'drizzle-orm/pg-core'
 import type * as SqliteCore from 'drizzle-orm/sqlite-core'
@@ -7,12 +8,14 @@ import type * as SqliteCore from 'drizzle-orm/sqlite-core'
  * Carries the column map but defers actual Drizzle table construction
  * until the module iterates the resolver result and knows the table name (key).
  */
-export type ColumnMap<TColumns extends Record<string, unknown>> = {
+export type ColumnMap<
+	TColumns extends Record<string, ColumnBuilderBase>,
+> = {
 	readonly __columns: TColumns
 }
 
 interface SchemaTableBuilder {
-	table<TColumns extends Record<string, unknown>>(
+	table<TColumns extends Record<string, ColumnBuilderBase>>(
 		columns: TColumns,
 	): ColumnMap<TColumns>
 }
@@ -36,5 +39,5 @@ export type SchemaBuilder =
 
 export type SchemaResolverResult = Record<
 	string,
-	ColumnMap<Record<string, unknown>>
+	ColumnMap<Record<string, ColumnBuilderBase>>
 >

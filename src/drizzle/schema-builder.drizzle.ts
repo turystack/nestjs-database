@@ -1,4 +1,16 @@
-import type { Table } from 'drizzle-orm'
+import type { BuildColumns, ColumnBuilderBase, Table } from 'drizzle-orm'
+import type {
+	PgColumnBuilderBase,
+	PgTableWithColumns,
+} from 'drizzle-orm/pg-core'
+import type {
+	MySqlColumnBuilderBase,
+	MySqlTableWithColumns,
+} from 'drizzle-orm/mysql-core'
+import type {
+	SQLiteColumnBuilderBase,
+	SQLiteTableWithColumns,
+} from 'drizzle-orm/sqlite-core'
 import * as mysqlCore from 'drizzle-orm/mysql-core'
 import * as pgCore from 'drizzle-orm/pg-core'
 import * as sqliteCore from 'drizzle-orm/sqlite-core'
@@ -14,7 +26,7 @@ import type {
 } from '@/drizzle/schema-builder.types.drizzle.js'
 
 const tableBuilder = {
-	table<TColumns extends Record<string, unknown>>(
+	table<TColumns extends Record<string, ColumnBuilderBase>>(
 		columns: TColumns,
 	): ColumnMap<TColumns> {
 		return { __columns: columns }
@@ -70,6 +82,74 @@ function createTable(
 	}
 }
 
+type MaterializePg<TResult extends SchemaResolverResult> = {
+	[K in keyof TResult & string]: TResult[K] extends ColumnMap<infer C>
+		? PgTableWithColumns<{
+				name: K
+				schema: undefined
+				columns: BuildColumns<
+					K,
+					C & Record<string, PgColumnBuilderBase>,
+					'pg'
+				>
+				dialect: 'pg'
+			}>
+		: never
+}
+
+type MaterializeMysql<TResult extends SchemaResolverResult> = {
+	[K in keyof TResult & string]: TResult[K] extends ColumnMap<infer C>
+		? MySqlTableWithColumns<{
+				name: K
+				schema: undefined
+				columns: BuildColumns<
+					K,
+					C & Record<string, MySqlColumnBuilderBase>,
+					'mysql'
+				>
+				dialect: 'mysql'
+			}>
+		: never
+}
+
+type MaterializeSqlite<TResult extends SchemaResolverResult> = {
+	[K in keyof TResult & string]: TResult[K] extends ColumnMap<infer C>
+		? SQLiteTableWithColumns<{
+				name: K
+				schema: undefined
+				columns: BuildColumns<
+					K,
+					C & Record<string, SQLiteColumnBuilderBase>,
+					'sqlite'
+				>
+				dialect: 'sqlite'
+			}>
+		: never
+}
+
+export type MaterializeSchema<
+	TAdapter extends DatabaseAdapter,
+	TResult extends SchemaResolverResult,
+> = TAdapter extends 'postgresql'
+	? MaterializePg<TResult>
+	: TAdapter extends 'mysql'
+		? MaterializeMysql<TResult>
+		: TAdapter extends 'sqlite'
+			? MaterializeSqlite<TResult>
+			: never
+
+export function materializeSchema<TResult extends SchemaResolverResult>(
+	adapter: 'postgresql',
+	resolverResult: TResult,
+): MaterializePg<TResult>
+export function materializeSchema<TResult extends SchemaResolverResult>(
+	adapter: 'mysql',
+	resolverResult: TResult,
+): MaterializeMysql<TResult>
+export function materializeSchema<TResult extends SchemaResolverResult>(
+	adapter: 'sqlite',
+	resolverResult: TResult,
+): MaterializeSqlite<TResult>
 export function materializeSchema(
 	adapter: DatabaseAdapter,
 	resolverResult: SchemaResolverResult,
