@@ -32,6 +32,7 @@
 		"url": "https://github.com/turystack/nestjs-database.git"
 	},
 	"dependencies": {
+		"@turystack/nestjs-database": "link:",
 		"drizzle-orm": "^0.44.0"
 	},
 	"peerDependencies": {

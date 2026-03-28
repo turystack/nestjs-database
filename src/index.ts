@@ -6,8 +6,11 @@ export * from '@/database.types.js'
 export type { MaterializeSchema } from '@/drizzle/schema-builder.drizzle.js'
 export type {
 	ColumnMap,
+	MysqlSchemaBuilder,
+	PgSchemaBuilder,
 	SchemaBuilder,
 	SchemaResolverResult,
+	SqliteSchemaBuilder,
 } from '@/drizzle/schema-builder.types.drizzle.js'
 export type { IsolationLevel } from '@/drizzle/transactional.drizzle.js'
 export { Transactional } from '@/drizzle/transactional.drizzle.js'

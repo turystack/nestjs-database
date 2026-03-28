@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@turystack/nestjs-database':
+        specifier: 'link:'
+        version: 'link:'
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(@prisma/client@7.5.0(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.11.11)(better-sqlite3@11.10.0)(mysql2@3.20.0(@types/node@22.19.15))(pg@8.20.0)
