@@ -1,4 +1,6 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common'
+import type { Table } from 'drizzle-orm'
+import { relations as drizzleRelations } from 'drizzle-orm'
 
 import { DATABASE_SERVICE } from '@/database.constants.js'
 import { DatabaseService } from '@/database.service.js'
@@ -9,61 +11,54 @@ import {
 	createSchemaBuilder,
 	materializeSchema,
 } from '@/drizzle/schema-builder.drizzle.js'
-import type { SchemaResolverResult } from '@/drizzle/schema-builder.types.drizzle.js'
+import type {
+	RelationsResolverResult,
+	SchemaResolverResult,
+} from '@/drizzle/schema-builder.types.drizzle.js'
 import { registerDb } from '@/drizzle/transaction-context.drizzle.js'
 
 @Module({})
 export class DatabaseModule {
-	static register<TResult extends SchemaResolverResult>(
-		options: DatabaseModuleOptions<TResult>,
-	): DynamicModule {
+	static register<
+		TResult extends SchemaResolverResult,
+		TRelations extends RelationsResolverResult | undefined = undefined,
+	>(options: DatabaseModuleOptions<TResult, TRelations>): DynamicModule {
 		return {
-			exports: [
-				DatabaseService,
-				DATABASE_SERVICE,
-			],
+			exports: [DatabaseService, DATABASE_SERVICE],
 			module: DatabaseModule,
 			providers: DatabaseModule._resolveProviders(options),
 		}
 	}
 
-	private static _resolveProviders<TResult extends SchemaResolverResult>(
-		options: DatabaseModuleOptions<TResult>,
-	): Provider[] {
+	private static _resolveProviders<
+		TResult extends SchemaResolverResult,
+		TRelations extends RelationsResolverResult | undefined,
+	>(options: DatabaseModuleOptions<TResult, TRelations>): Provider[] {
 		return [
 			{
 				provide: DatabaseService,
 				useFactory: async () => {
-					let schema: Record<string, unknown>
+					const tables = materializeSchema(
+						options.schemaResolver(createSchemaBuilder()),
+					)
 
-					switch (options.adapter) {
-						case 'postgresql': {
-							schema = materializeSchema(
-								'postgresql',
-								options.schemaResolver(createSchemaBuilder('postgresql')),
-							)
-							break
-						}
-						case 'mysql': {
-							schema = materializeSchema(
-								'mysql',
-								options.schemaResolver(createSchemaBuilder('mysql')),
-							)
-							break
-						}
-						case 'sqlite': {
-							schema = materializeSchema(
-								'sqlite',
-								options.schemaResolver(createSchemaBuilder('sqlite')),
-							)
-							break
-						}
+					let fullSchema: Record<string, unknown> = { ...tables }
+
+					if (options.relationsResolver) {
+						const relationsResult = options.relationsResolver(
+							tables as never,
+							{ relations: drizzleRelations },
+						)
+						fullSchema = { ...tables, ...relationsResult }
 					}
 
-					const { db, strategy } = await createDrizzleClient(options, schema)
+					const { db, strategy } = await createDrizzleClient(
+						options as DatabaseModuleOptions,
+						fullSchema,
+					)
 					registerDb(db)
 
-					return new DatabaseService(db, schema, strategy)
+					return new DatabaseService(db, tables, strategy)
 				},
 			},
 			{

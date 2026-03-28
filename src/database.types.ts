@@ -1,107 +1,122 @@
+import type { Table } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import type { MySql2Database } from 'drizzle-orm/mysql2'
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 
 import type {
-	MysqlSchemaBuilder,
+	MaterializeSchema,
+	MaterializeSchemaWithRelations,
+} from '@/drizzle/schema-builder.drizzle.js'
+import type {
 	PgSchemaBuilder,
+	RelationsHelpers,
+	RelationsResolverResult,
 	SchemaResolverResult,
-	SqliteSchemaBuilder,
 } from '@/drizzle/schema-builder.types.drizzle.js'
-import type { MaterializeSchema } from '@/drizzle/schema-builder.drizzle.js'
-
-/** Supported database adapters. */
-export type DatabaseAdapter = 'postgresql' | 'mysql' | 'sqlite'
+import type { InferRepositories } from '@/repository/table-repository.types.js'
 
 /**
  * Options for {@link DatabaseModule.register}.
- * Each adapter has its own nested config key.
  * The `schemaResolver` receives a typed schema builder with all column
- * helpers for the selected adapter — no separate drizzle import needed.
- *
- * @example
- * ```ts
- * DatabaseModule.register({
- *   adapter: 'postgresql',
- *   postgresql: { url: process.env.DATABASE_URL },
- *   schemaResolver: (schema) => ({
- *     user: schema.table({
- *       id: schema.integer().primaryKey().generatedAlwaysAsIdentity(),
- *       name: schema.varchar({ length: 255 }).notNull(),
- *       email: schema.varchar({ length: 255 }).notNull().unique(),
- *     }),
- *   }),
- * })
- * ```
+ * helpers for PostgreSQL — no separate drizzle import needed.
+ * The optional `relationsResolver` receives the materialized tables and
+ * a `{ relations }` helper to define relations between tables.
  */
 export type DatabaseModuleOptions<
 	TResult extends SchemaResolverResult = SchemaResolverResult,
-> =
-	| {
-			adapter: 'postgresql'
-			postgresql: { url: string }
-			schemaResolver: (schema: PgSchemaBuilder) => TResult
-	  }
-	| {
-			adapter: 'mysql'
-			mysql: { url: string }
-			schemaResolver: (schema: MysqlSchemaBuilder) => TResult
-	  }
-	| {
-			adapter: 'sqlite'
-			sqlite: { url: string }
-			schemaResolver: (schema: SqliteSchemaBuilder) => TResult
-	  }
+	TRelations extends RelationsResolverResult | undefined = undefined,
+> = {
+	adapter: 'postgresql'
+	postgresql: {
+		url: string
+	}
+	schemaResolver: (schema: PgSchemaBuilder) => TResult
+	relationsResolver?: (
+		tables: MaterializeSchema<TResult>,
+		helpers: RelationsHelpers,
+	) => TRelations & RelationsResolverResult
+}
 
 /**
  * Type registry for module augmentation.
- * Augment this interface via `declare module` to provide a concrete type
- * for the drizzle database instance returned by `DatabaseService.db`.
+ * Augment this interface via `declare module` to provide concrete types
+ * for the drizzle database instance and schema used by `DatabaseService`.
  *
  * @example
  * ```ts
- * import type { InferDatabase } from '@turystack/nestjs-database'
- * import type { createDatabaseConfig } from './database.schema.js'
+ * import type { InferDatabaseConfig } from '@turystack/nestjs-database'
+ * import type { databaseSchema, databaseRelations } from './database.schema.js'
  *
  * declare module '@turystack/nestjs-database' {
- *   interface DatabaseServiceRegistry {
- *     db: InferDatabase<ReturnType<typeof createDatabaseConfig>>
- *   }
+ *   interface DatabaseServiceRegistry
+ *     extends InferDatabaseConfig<
+ *       ReturnType<typeof databaseSchema>,
+ *       ReturnType<typeof databaseRelations>
+ *     > {}
  * }
  * ```
  */
 export interface DatabaseServiceRegistry {}
 
-/** Resolves to the augmented `db` type, or `unknown` when the registry is not augmented. */
-export type ResolvedDatabase =
-	DatabaseServiceRegistry extends { db: infer TDb } ? TDb : unknown
+/** Resolves to the augmented `raw` db type, or `unknown` when the registry is not augmented. */
+export type ResolvedDatabase = DatabaseServiceRegistry extends {
+	raw: infer TDb
+}
+	? TDb
+	: unknown
+
+/** Resolves to the augmented materialized schema, or empty record when not augmented. */
+export type ResolvedSchema = DatabaseServiceRegistry extends {
+	schema: infer TSchema extends Record<string, Table>
+}
+	? TSchema
+	: Record<string, Table>
+
+/** Maps each schema table to its typed `TableRepository`. */
+export type ResolvedRepositories = DatabaseServiceRegistry extends {
+	raw: infer TDb
+	schema: infer TSchema extends Record<string, Table>
+}
+	? InferRepositories<TDb, TSchema>
+	: {}
 
 /**
- * Infers the fully-typed drizzle database instance from a {@link DatabaseModuleOptions} config.
- *
- * The consumer must use `satisfies DatabaseModuleOptions` (instead of an explicit return type
- * annotation) to preserve the narrowed adapter and schema types.
+ * Infers the fully-typed drizzle database instance from a schema and optional relations.
  */
-export type InferDatabase<T extends DatabaseModuleOptions> =
-	T extends {
-		adapter: 'postgresql'
-		schemaResolver: (schema: PgSchemaBuilder) => infer R
-	}
-		? R extends SchemaResolverResult
-			? NodePgDatabase<MaterializeSchema<'postgresql', R>>
-			: never
-		: T extends {
-					adapter: 'mysql'
-					schemaResolver: (schema: MysqlSchemaBuilder) => infer R
-				}
-			? R extends SchemaResolverResult
-				? MySql2Database<MaterializeSchema<'mysql', R>>
-				: never
-			: T extends {
-						adapter: 'sqlite'
-						schemaResolver: (schema: SqliteSchemaBuilder) => infer R
-					}
-				? R extends SchemaResolverResult
-					? BetterSQLite3Database<MaterializeSchema<'sqlite', R>>
-					: never
-				: never
+export type InferDatabase<
+	TSchema extends SchemaResolverResult,
+	TRelations extends RelationsResolverResult | undefined = undefined,
+> = NodePgDatabase<MaterializeSchemaWithRelations<TSchema, TRelations>>
+
+/**
+ * Convenience type for augmenting `DatabaseServiceRegistry` in a single declaration.
+ * Provides both `raw` (drizzle client typed with tables + relations) and
+ * `schema` (materialized tables only, for repository inference).
+ *
+ * @example
+ * ```ts
+ * declare module '@turystack/nestjs-database' {
+ *   interface DatabaseServiceRegistry
+ *     extends InferDatabaseConfig<
+ *       ReturnType<typeof databaseSchema>,
+ *       ReturnType<typeof databaseRelations>
+ *     > {}
+ * }
+ * ```
+ */
+export type InferDatabaseConfig<
+	TSchemaResult extends SchemaResolverResult,
+	TRelationsResult extends RelationsResolverResult | undefined = undefined,
+> = {
+	raw: InferDatabase<TSchemaResult, TRelationsResult>
+	schema: MaterializeSchema<TSchemaResult>
+}
+
+export type DatabaseSchemaResolver = (
+	schema: PgSchemaBuilder,
+) => SchemaResolverResult
+
+export type DatabaseRelationsResolver<
+	TSchemaResult extends SchemaResolverResult,
+> = (
+	tables: MaterializeSchema<TSchemaResult>,
+	helpers: RelationsHelpers,
+) => RelationsResolverResult

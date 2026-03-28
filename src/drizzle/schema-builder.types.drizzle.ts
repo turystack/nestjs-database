@@ -1,7 +1,5 @@
-import type { ColumnBuilderBase } from 'drizzle-orm'
-import type * as MysqlCore from 'drizzle-orm/mysql-core'
+import type { ColumnBuilderBase, Relation, Relations, relations } from 'drizzle-orm'
 import type * as PgCore from 'drizzle-orm/pg-core'
-import type * as SqliteCore from 'drizzle-orm/sqlite-core'
 
 /**
  * Opaque container produced by schema.table({ ...columnBuilders }).
@@ -24,20 +22,18 @@ interface SchemaTableBuilder {
 export type PgSchemaBuilder = SchemaTableBuilder &
 	Omit<typeof PgCore, 'pgTable'>
 
-/** Schema builder for the mysql adapter — exposes all mysql column types. */
-export type MysqlSchemaBuilder = SchemaTableBuilder &
-	Omit<typeof MysqlCore, 'mysqlTable'>
-
-/** Schema builder for the sqlite adapter — exposes all sqlite column types. */
-export type SqliteSchemaBuilder = SchemaTableBuilder &
-	Omit<typeof SqliteCore, 'sqliteTable'>
-
-export type SchemaBuilder =
-	| PgSchemaBuilder
-	| MysqlSchemaBuilder
-	| SqliteSchemaBuilder
+export type SchemaBuilder = PgSchemaBuilder
 
 export type SchemaResolverResult = Record<
 	string,
 	ColumnMap<Record<string, ColumnBuilderBase>>
 >
+
+export type RelationsResolverResult = Record<
+	string,
+	Relations<string, Record<string, Relation>>
+>
+
+export interface RelationsHelpers {
+	relations: typeof relations
+}

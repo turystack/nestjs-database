@@ -9,9 +9,6 @@ export type IsolationLevel =
 	| 'read committed'
 	| 'repeatable read'
 	| 'serializable'
-	| 'deferred'
-	| 'immediate'
-	| 'exclusive'
 
 export function Transactional(isolationLevel?: IsolationLevel) {
 	return (
