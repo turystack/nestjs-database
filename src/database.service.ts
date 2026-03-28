@@ -3,9 +3,6 @@ import { Injectable } from '@nestjs/common'
 import type { AdapterStrategy } from '@/drizzle/client.drizzle.js'
 import { getCurrentTx } from '@/drizzle/transaction-context.drizzle.js'
 
-// biome-ignore lint/suspicious/noExplicitAny: db/tx types vary per dialect
-type AnyDb = any
-
 /**
  * Provides access to the Drizzle database instance and schema tables.
  *
@@ -33,10 +30,10 @@ type AnyDb = any
 export class DatabaseService<
 	TSchema extends Record<string, unknown> = Record<string, unknown>,
 > {
-	private readonly _db: AnyDb
+	private readonly _db: unknown
 	readonly _strategy: AdapterStrategy
 
-	constructor(db: AnyDb, schema: TSchema, strategy: AdapterStrategy) {
+	constructor(db: unknown, schema: TSchema, strategy: AdapterStrategy) {
 		this._db = db
 		this._strategy = strategy
 		Object.assign(this, schema)
@@ -46,7 +43,7 @@ export class DatabaseService<
 	 * Returns the active transaction if inside a `@Transactional` context,
 	 * otherwise returns the root drizzle db instance.
 	 */
-	get db(): AnyDb {
+	get db(): unknown {
 		return getCurrentTx() ?? this._db
 	}
 }

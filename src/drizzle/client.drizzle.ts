@@ -1,25 +1,21 @@
 import type { DatabaseModuleOptions } from '@/database.types.js'
 
-// biome-ignore lint/suspicious/noExplicitAny: db/tx types vary per dialect
-type AnyDb = any
-// biome-ignore lint/suspicious/noExplicitAny: tx types vary per dialect
-type AnyTx = any
-
 export interface AdapterStrategy {
 	runTransaction(
-		db: AnyDb,
-		fn: (tx: AnyTx) => Promise<unknown>,
+		db: unknown,
+		fn: (tx: unknown) => Promise<unknown>,
 		isolationLevel?: string,
 	): Promise<unknown>
 }
 
 class PostgresqlStrategy implements AdapterStrategy {
 	async runTransaction(
-		db: AnyDb,
-		fn: (tx: AnyTx) => Promise<unknown>,
+		db: unknown,
+		fn: (tx: unknown) => Promise<unknown>,
 		isolationLevel?: string,
 	): Promise<unknown> {
-		return db.transaction(
+		const pgDb = db as { transaction: (fn: (tx: unknown) => Promise<unknown>, config?: { isolationLevel: string }) => Promise<unknown> }
+		return pgDb.transaction(
 			fn,
 			isolationLevel
 				? {
@@ -32,11 +28,12 @@ class PostgresqlStrategy implements AdapterStrategy {
 
 class MysqlStrategy implements AdapterStrategy {
 	async runTransaction(
-		db: AnyDb,
-		fn: (tx: AnyTx) => Promise<unknown>,
+		db: unknown,
+		fn: (tx: unknown) => Promise<unknown>,
 		isolationLevel?: string,
 	): Promise<unknown> {
-		return db.transaction(
+		const mysqlDb = db as { transaction: (fn: (tx: unknown) => Promise<unknown>, config?: { isolationLevel: string }) => Promise<unknown> }
+		return mysqlDb.transaction(
 			fn,
 			isolationLevel
 				? {
@@ -49,17 +46,17 @@ class MysqlStrategy implements AdapterStrategy {
 
 class SqliteStrategy implements AdapterStrategy {
 	async runTransaction(
-		db: AnyDb,
-		fn: (tx: AnyTx) => Promise<unknown>,
+		db: unknown,
+		fn: (tx: unknown) => Promise<unknown>,
 		isolationLevel?: string,
 	): Promise<unknown> {
-		// SQLite uses behavior instead of isolationLevel
+		const sqliteDb = db as { transaction: (fn: (tx: unknown) => Promise<unknown>, config?: { behavior: string }) => Promise<unknown> }
 		const behavior = isolationLevel as
 			| 'deferred'
 			| 'immediate'
 			| 'exclusive'
 			| undefined
-		return db.transaction(
+		return sqliteDb.transaction(
 			fn,
 			behavior
 				? {
@@ -70,32 +67,28 @@ class SqliteStrategy implements AdapterStrategy {
 	}
 }
 
-export function createDrizzleClient(options: DatabaseModuleOptions): {
-	db: AnyDb
+export async function createDrizzleClient(options: DatabaseModuleOptions): Promise<{
+	db: unknown
 	strategy: AdapterStrategy
-} {
+}> {
 	switch (options.adapter) {
 		case 'postgresql': {
-			// biome-ignore lint/suspicious/noExplicitAny: dynamic require avoids compile-time peer dep
-			const { drizzle } = require('drizzle-orm/node-postgres') as any
+			const { drizzle } = await import('drizzle-orm/node-postgres')
 			return {
 				db: drizzle(options.postgresql.url),
 				strategy: new PostgresqlStrategy(),
 			}
 		}
 		case 'mysql': {
-			// biome-ignore lint/suspicious/noExplicitAny: dynamic require avoids compile-time peer dep
-			const { drizzle } = require('drizzle-orm/mysql2') as any
+			const { drizzle } = await import('drizzle-orm/mysql2')
 			return {
 				db: drizzle(options.mysql.url),
 				strategy: new MysqlStrategy(),
 			}
 		}
 		case 'sqlite': {
-			// biome-ignore lint/suspicious/noExplicitAny: dynamic require avoids compile-time peer dep
-			const { drizzle } = require('drizzle-orm/better-sqlite3') as any
-			// biome-ignore lint/suspicious/noExplicitAny: dynamic require avoids compile-time peer dep
-			const Database = require('better-sqlite3') as any
+			const { drizzle } = await import('drizzle-orm/better-sqlite3')
+			const Database = (await import('better-sqlite3')).default
 			return {
 				db: drizzle(new Database(options.sqlite.url)),
 				strategy: new SqliteStrategy(),

@@ -28,7 +28,12 @@ export function Transactional(isolationLevel?: IsolationLevel) {
 				return original.apply(this, args)
 			}
 
-			const db = getDb()
+			const db = getDb() as {
+				transaction: (
+					fn: (tx: unknown) => Promise<unknown>,
+					config?: { isolationLevel?: string },
+				) => Promise<unknown>
+			}
 
 			return db.transaction(
 				(tx: unknown) =>

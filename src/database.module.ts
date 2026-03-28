@@ -33,8 +33,8 @@ export class DatabaseModule {
 		return [
 			{
 				provide: DatabaseService,
-				useFactory: () => {
-					const { db, strategy } = createDrizzleClient(options)
+				useFactory: async () => {
+					const { db, strategy } = await createDrizzleClient(options)
 					registerDb(db)
 
 					let schema: Record<string, unknown>
