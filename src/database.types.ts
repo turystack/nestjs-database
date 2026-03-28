@@ -13,6 +13,10 @@ import type {
 } from '@/drizzle/schema-builder.types.drizzle.js'
 import type { InferRepositories } from '@/repository/table-repository.types.js'
 
+export type DatabaseOptions = {
+	url: string
+}
+
 /**
  * Options for {@link DatabaseModule.register}.
  * The `schemaResolver` receives a typed schema builder with all column
@@ -25,9 +29,7 @@ export type DatabaseModuleOptions<
 	TRelations extends RelationsResolverResult | undefined = undefined,
 > = {
 	adapter: 'postgresql'
-	postgresql: {
-		url: string
-	}
+	postgresql: DatabaseOptions
 	schemaResolver: (schema: PgSchemaBuilder) => TResult
 	relationsResolver?: (
 		tables: MaterializeSchema<TResult>,
