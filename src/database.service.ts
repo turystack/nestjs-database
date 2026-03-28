@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 
-import type { DatabaseServiceRegistry } from '@/database.types.js'
+import type { ResolvedDatabase } from '@/database.types.js'
 import type { AdapterStrategy } from '@/drizzle/client.drizzle.js'
 import { getCurrentTx } from '@/drizzle/transaction-context.drizzle.js'
 
@@ -31,11 +31,11 @@ import { getCurrentTx } from '@/drizzle/transaction-context.drizzle.js'
 export class DatabaseService<
 	TSchema extends Record<string, unknown> = Record<string, unknown>,
 > {
-	private readonly _db: DatabaseServiceRegistry['db']
+	private readonly _db: ResolvedDatabase
 	readonly _strategy: AdapterStrategy
 
 	constructor(
-		db: DatabaseServiceRegistry['db'],
+		db: ResolvedDatabase,
 		schema: TSchema,
 		strategy: AdapterStrategy,
 	) {
@@ -48,7 +48,7 @@ export class DatabaseService<
 	 * Returns the active transaction if inside a `@Transactional` context,
 	 * otherwise returns the root drizzle db instance.
 	 */
-	get db(): DatabaseServiceRegistry['db'] {
+	get db(): ResolvedDatabase {
 		return getCurrentTx() ?? this._db
 	}
 }

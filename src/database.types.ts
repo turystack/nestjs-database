@@ -70,9 +70,11 @@ export type DatabaseModuleOptions<
  * }
  * ```
  */
-export interface DatabaseServiceRegistry {
-	db: unknown
-}
+export interface DatabaseServiceRegistry {}
+
+/** Resolves to the augmented `db` type, or `unknown` when the registry is not augmented. */
+export type ResolvedDatabase =
+	DatabaseServiceRegistry extends { db: infer TDb } ? TDb : unknown
 
 /**
  * Infers the fully-typed drizzle database instance from a {@link DatabaseModuleOptions} config.

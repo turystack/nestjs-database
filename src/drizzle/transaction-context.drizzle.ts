@@ -1,21 +1,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-import type { DatabaseServiceRegistry } from '@/database.types.js'
+import type { ResolvedDatabase } from '@/database.types.js'
 
 export const transactionStorage =
-	new AsyncLocalStorage<DatabaseServiceRegistry['db']>()
+	new AsyncLocalStorage<ResolvedDatabase>()
 
-export function getCurrentTx(): DatabaseServiceRegistry['db'] | undefined {
+export function getCurrentTx(): ResolvedDatabase | undefined {
 	return transactionStorage.getStore()
 }
 
-let _db: DatabaseServiceRegistry['db'] | undefined
+let _db: ResolvedDatabase | undefined
 
-export function registerDb(db: DatabaseServiceRegistry['db']): void {
+export function registerDb(db: ResolvedDatabase): void {
 	_db = db
 }
 
-export function getDb(): DatabaseServiceRegistry['db'] {
+export function getDb(): ResolvedDatabase {
 	if (!_db) {
 		throw new Error(
 			'[DatabaseModule] db not initialized — was DatabaseModule.register() called?',
