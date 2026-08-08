@@ -1,6 +1,5 @@
+import { ConcurrentUpdateError } from '@turystack/exceptions'
 import {
-	type SQL,
-	type Table,
 	and,
 	between,
 	count as countFn,
@@ -24,9 +23,17 @@ import {
 	notInArray,
 	notLike,
 	or,
+	type SQL,
 	sql,
+	type Table,
 } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
+
+import {
+	CREATED_BY_COLUMN,
+	UPDATED_BY_COLUMN,
+	withAuditActor,
+} from '@/audit.context.js'
 
 import {
 	RecordNotCreatedError,
@@ -34,32 +41,35 @@ import {
 } from './table-repository.errors.js'
 import type { WhereOperators } from './table-repository.types.js'
 
+/** Column holding the row version when optimistic locking is used. */
+const DEFAULT_VERSION_COLUMN = 'version'
+
 // ---------------------------------------------------------------------------
 // Operators singleton
 // ---------------------------------------------------------------------------
 
 const WHERE_OPERATORS: WhereOperators = {
+	and,
+	between,
 	eq,
-	ne,
+	exists,
 	gt,
 	gte,
+	ilike,
+	inArray,
+	isNotNull,
+	isNull,
+	like,
 	lt,
 	lte,
-	and,
-	or,
+	ne,
 	not,
-	inArray,
-	notInArray,
-	isNull,
-	isNotNull,
-	exists,
-	notExists,
-	between,
 	notBetween,
-	like,
-	notLike,
-	ilike,
+	notExists,
 	notIlike,
+	notInArray,
+	notLike,
+	or,
 	sql,
 }
 
@@ -94,8 +104,12 @@ interface SelectChain extends Promise<Record<string, unknown>[]> {
 
 interface DbProxy {
 	query: Record<string, QueryProxy>
-	insert: (table: Table) => { values: (data: unknown) => InsertChain }
-	update: (table: Table) => { set: (data: unknown) => MutationChain }
+	insert: (table: Table) => {
+		values: (data: unknown) => InsertChain
+	}
+	update: (table: Table) => {
+		set: (data: unknown) => MutationChain
+	}
 	delete: (table: Table) => MutationChain
 	select: (fields: Record<string, unknown>) => {
 		from: (table: Table) => SelectChain
@@ -117,7 +131,12 @@ export class TableRepository {
 	) {
 		const columns = getTableColumns(this._table)
 		const pk = Object.entries(columns).find(
-			([_, col]) => (col as unknown as { primary: boolean }).primary,
+			([_, col]) =>
+				(
+					col as unknown as {
+						primary: boolean
+					}
+				).primary,
 		)
 
 		if (!pk) {
@@ -128,7 +147,9 @@ export class TableRepository {
 
 		this._pkColumn = pk[0]
 		this._pkHasDefault = (
-			pk[1] as unknown as { hasDefault: boolean }
+			pk[1] as unknown as {
+				hasDefault: boolean
+			}
 		).hasDefault
 	}
 
@@ -148,7 +169,10 @@ export class TableRepository {
 
 	async findById(
 		id: unknown,
-		options?: { columns?: Record<string, boolean>; with?: Record<string, unknown> },
+		options?: {
+			columns?: Record<string, boolean>
+			with?: Record<string, unknown>
+		},
 	): Promise<unknown> {
 		return this.findFirst({
 			where: this._pkEq(id),
@@ -158,7 +182,11 @@ export class TableRepository {
 
 	async count(options?: { where?: unknown }): Promise<number> {
 		const db = this._db()
-		const query = db.select({ count: countFn() }).from(this._table)
+		const query = db
+			.select({
+				count: countFn(),
+			})
+			.from(this._table)
 
 		const result = options?.where
 			? await this._applySelectWhere(query, options.where)
@@ -178,7 +206,9 @@ export class TableRepository {
 		}
 
 		const result = await db
-			.select({ _: sql`1` })
+			.select({
+				_: sql`1`,
+			})
 			.from(this._table)
 			.where(condition)
 			.limit(1)
@@ -197,7 +227,7 @@ export class TableRepository {
 			with?: Record<string, unknown>
 		},
 	): Promise<unknown> {
-		const createData = this._autoGeneratePk(data)
+		const createData = this._withCreatedBy(this._autoGeneratePk(data))
 		const db = this._db()
 		const chain = db.insert(this._table).values(createData)
 
@@ -209,7 +239,9 @@ export class TableRepository {
 				with: options?.with,
 			})
 
-			if (!result) throw new RecordNotCreatedError(this._tableName)
+			if (!result) {
+				throw new RecordNotCreatedError(this._tableName)
+			}
 			return result
 		}
 
@@ -217,15 +249,19 @@ export class TableRepository {
 			? await chain.returning(this._mapReturning(options.returning))
 			: await chain.returning()
 
-		if (!rows[0]) throw new RecordNotCreatedError(this._tableName)
+		if (!rows[0]) {
+			throw new RecordNotCreatedError(this._tableName)
+		}
 		return rows[0]
 	}
 
 	async createMany(
 		data: Record<string, unknown>[],
-		options?: { returning?: Record<string, boolean> },
+		options?: {
+			returning?: Record<string, boolean>
+		},
 	): Promise<unknown[]> {
-		const rows = data.map((d) => this._autoGeneratePk(d))
+		const rows = data.map((d) => this._withCreatedBy(this._autoGeneratePk(d)))
 		const db = this._db()
 		const chain = db.insert(this._table).values(rows)
 
@@ -248,7 +284,10 @@ export class TableRepository {
 			)
 		}
 
-		const chain = db.update(this._table).set(options.data).where(condition)
+		const chain = db
+			.update(this._table)
+			.set(this._withUpdatedBy(options.data))
+			.where(condition)
 
 		return options.returning
 			? chain.returning(this._mapReturning(options.returning))
@@ -259,33 +298,122 @@ export class TableRepository {
 		id: unknown,
 		data: Record<string, unknown>,
 		options?: {
+			expectedVersion?: number
 			returning?: Record<string, boolean>
+			versionColumn?: string
 			with?: Record<string, unknown>
 		},
 	): Promise<unknown> {
+		const guarded = this._withVersionGuard(id, data, options)
+
 		if (options?.with) {
-			await this.update({
-				where: this._pkEq(id),
-				data,
+			const updated = await this.update({
+				data: guarded.data,
+				where: guarded.where,
 			})
+
+			if (!updated[0]) {
+				await this._failedWrite(id, options)
+			}
 
 			const result = await this._refetch(id, {
 				columns: options?.returning,
 				with: options?.with,
 			})
 
-			if (!result) throw new RecordNotFoundError(this._tableName)
+			if (!result) {
+				throw new RecordNotFoundError(this._tableName)
+			}
 			return result
 		}
 
 		const rows = await this.update({
-			where: this._pkEq(id),
-			data,
+			data: guarded.data,
 			returning: options?.returning,
+			where: guarded.where,
 		})
 
-		if (!rows[0]) throw new RecordNotFoundError(this._tableName)
+		if (!rows[0]) {
+			await this._failedWrite(id, options)
+		}
 		return rows[0]
+	}
+
+	/**
+	 * Narrows the write to the version the caller read, and bumps it, so a
+	 * concurrent writer that got there first cannot be silently overwritten.
+	 */
+	private _withVersionGuard(
+		id: unknown,
+		data: Record<string, unknown>,
+		options?: {
+			expectedVersion?: number
+			versionColumn?: string
+		},
+	): {
+		data: Record<string, unknown>
+		where: SQL
+	} {
+		if (options?.expectedVersion === undefined) {
+			return {
+				data,
+				where: this._pkEq(id),
+			}
+		}
+
+		const column = options.versionColumn ?? DEFAULT_VERSION_COLUMN
+		const columns = getTableColumns(this._table)
+
+		if (!columns[column]) {
+			throw new Error(
+				`[TableRepository] table "${this._tableName}" has no "${column}" column for optimistic locking`,
+			)
+		}
+
+		return {
+			data: {
+				...data,
+				[column]: options.expectedVersion + 1,
+			},
+			where: and(
+				this._pkEq(id),
+				eq(columns[column], options.expectedVersion as never),
+			) as SQL,
+		}
+	}
+
+	/**
+	 * A write that matched nothing is ambiguous: the row may be gone, or another
+	 * writer may have moved the version on. Resolving it costs one read, and only
+	 * on the failure path.
+	 */
+	private async _failedWrite(
+		id: unknown,
+		options?: {
+			expectedVersion?: number
+			versionColumn?: string
+		},
+	): Promise<never> {
+		if (options?.expectedVersion === undefined) {
+			throw new RecordNotFoundError(this._tableName)
+		}
+
+		const current = await this._refetch(id, {})
+
+		if (!current) {
+			throw new RecordNotFoundError(this._tableName)
+		}
+
+		const column = options.versionColumn ?? DEFAULT_VERSION_COLUMN
+
+		throw new ConcurrentUpdateError(
+			`[TableRepository] "${this._tableName}" was updated by another writer`,
+			{
+				actualVersion: (current as Record<string, unknown>)[column],
+				expectedVersion: options.expectedVersion,
+				table: this._tableName,
+			},
+		)
 	}
 
 	async delete(options: {
@@ -309,8 +437,12 @@ export class TableRepository {
 	}
 
 	async deleteById(id: unknown): Promise<unknown> {
-		const rows = await this.delete({ where: this._pkEq(id) })
-		if (!rows[0]) throw new RecordNotFoundError(this._tableName)
+		const rows = await this.delete({
+			where: this._pkEq(id),
+		})
+		if (!rows[0]) {
+			throw new RecordNotFoundError(this._tableName)
+		}
 		return rows[0]
 	}
 
@@ -333,8 +465,8 @@ export class TableRepository {
 			set: Record<string, unknown>
 			where?: SQL
 		} = {
-			target: targetRefs,
 			set: options.update,
+			target: targetRefs,
 		}
 
 		if (options.where) {
@@ -354,7 +486,9 @@ export class TableRepository {
 				with: options.with,
 			})
 
-			if (!result) throw new RecordNotCreatedError(this._tableName)
+			if (!result) {
+				throw new RecordNotCreatedError(this._tableName)
+			}
 			return result
 		}
 
@@ -362,7 +496,9 @@ export class TableRepository {
 			? await chain.returning(this._mapReturning(options.returning))
 			: await chain.returning()
 
-		if (!rows[0]) throw new RecordNotCreatedError(this._tableName)
+		if (!rows[0]) {
+			throw new RecordNotCreatedError(this._tableName)
+		}
 		return rows[0]
 	}
 
@@ -374,6 +510,20 @@ export class TableRepository {
 		return this._getDb() as DbProxy
 	}
 
+	/** Stamps the acting principal, when the table declares the column. */
+	private _withCreatedBy(
+		data: Record<string, unknown>,
+	): Record<string, unknown> {
+		return withAuditActor(data, getTableColumns(this._table), CREATED_BY_COLUMN)
+	}
+
+	/** Stamps the acting principal, when the table declares the column. */
+	private _withUpdatedBy(
+		data: Record<string, unknown>,
+	): Record<string, unknown> {
+		return withAuditActor(data, getTableColumns(this._table), UPDATED_BY_COLUMN)
+	}
+
 	private _pkEq(id: unknown): SQL {
 		const columns = getTableColumns(this._table)
 		return eq(columns[this._pkColumn], id as never)
@@ -382,12 +532,19 @@ export class TableRepository {
 	private _autoGeneratePk(
 		data: Record<string, unknown>,
 	): Record<string, unknown> {
-		if (this._pkHasDefault) return data
+		if (this._pkHasDefault) {
+			return data
+		}
 
 		const value = data[this._pkColumn]
-		if (value !== undefined && value !== null) return data
+		if (value !== undefined && value !== null) {
+			return data
+		}
 
-		return { ...data, [this._pkColumn]: uuidv7() }
+		return {
+			...data,
+			[this._pkColumn]: uuidv7(),
+		}
 	}
 
 	private async _refetch(
@@ -399,8 +556,12 @@ export class TableRepository {
 	): Promise<unknown> {
 		return this.findFirst({
 			where: this._pkEq(pkValue),
-			...(options?.columns && { columns: options.columns }),
-			...(options?.with && { with: options.with }),
+			...(options?.columns && {
+				columns: options.columns,
+			}),
+			...(options?.with && {
+				with: options.with,
+			}),
 		})
 	}
 
@@ -420,10 +581,7 @@ export class TableRepository {
 	private _evaluateWhere(where: unknown): SQL | undefined {
 		if (typeof where === 'function') {
 			return (
-				where as (
-					fields: unknown,
-					operators: WhereOperators,
-				) => SQL | undefined
+				where as (fields: unknown, operators: WhereOperators) => SQL | undefined
 			)(getTableColumns(this._table), WHERE_OPERATORS)
 		}
 		return where as SQL | undefined
@@ -434,7 +592,9 @@ export class TableRepository {
 		where: unknown,
 	): Promise<Record<string, unknown>[]> {
 		const condition = this._evaluateWhere(where)
-		if (condition) return query.where(condition)
+		if (condition) {
+			return query.where(condition)
+		}
 		return query
 	}
 }

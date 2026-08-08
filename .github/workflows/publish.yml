@@ -10,8 +10,14 @@ permissions:
   contents: write
 
 jobs:
+  # Nothing reaches npm without the suite passing.
+  verify:
+    if: "!contains(github.event.head_commit.message, 'chore: release')"
+    uses: ./.github/workflows/ci.yml
+
   publish:
     if: "!contains(github.event.head_commit.message, 'chore: release')"
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:
@@ -25,9 +31,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Configure git
         run: |

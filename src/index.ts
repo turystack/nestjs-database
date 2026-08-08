@@ -1,4 +1,13 @@
+export type { AuditActorReader } from '@/audit.context.js'
+export {
+	currentAuditActor,
+	registerAuditActor,
+} from '@/audit.context.js'
 export { DATABASE_SERVICE } from '@/database.constants.js'
+export {
+	defineDatabaseRelations,
+	defineDatabaseSchema,
+} from '@/database.helpers.js'
 export { DatabaseModule } from '@/database.module.js'
 export { DatabaseService } from '@/database.service.js'
 export type {
@@ -28,6 +37,16 @@ export type {
 	SchemaBuilder,
 	SchemaResolverResult,
 } from '@/drizzle/schema-builder.types.drizzle.js'
+export type {
+	AfterCommitHook,
+	BeforeCommitHook,
+} from '@/drizzle/transaction-context.drizzle.js'
+export {
+	getCurrentTx,
+	onAfterCommit,
+	onBeforeCommit,
+	transactionState,
+} from '@/drizzle/transaction-context.drizzle.js'
 export type { IsolationLevel } from '@/drizzle/transactional.drizzle.js'
 export { Transactional } from '@/drizzle/transactional.drizzle.js'
 export {

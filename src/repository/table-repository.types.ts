@@ -1,14 +1,12 @@
 import type {
-	SQL,
-	Table,
-	InferSelectModel,
-	InferInsertModel,
 	and,
 	between,
 	eq,
 	exists,
 	gt,
 	gte,
+	InferInsertModel,
+	InferSelectModel,
 	ilike,
 	inArray,
 	isNotNull,
@@ -24,7 +22,9 @@ import type {
 	notInArray,
 	notLike,
 	or,
+	SQL,
 	sql,
+	Table,
 } from 'drizzle-orm'
 
 // ---------------------------------------------------------------------------
@@ -78,12 +78,13 @@ type TrueKeys<T extends Record<string, boolean | undefined>> = {
 export type InferReturning<
 	TTable extends Table,
 	TReturning extends ReturningColumns<TTable> | undefined,
-> = TReturning extends Record<string, boolean | undefined>
-	? Pick<
-			InferSelectModel<TTable>,
-			TrueKeys<TReturning> & keyof InferSelectModel<TTable>
-		>
-	: InferSelectModel<TTable>
+> =
+	TReturning extends Record<string, boolean | undefined>
+		? Pick<
+				InferSelectModel<TTable>,
+				TrueKeys<TReturning> & keyof InferSelectModel<TTable>
+			>
+		: InferSelectModel<TTable>
 
 // ---------------------------------------------------------------------------
 // Where
@@ -126,7 +127,11 @@ export type WhereInput<TTable extends Table> = WhereCallback<TTable> | SQL
 // ---------------------------------------------------------------------------
 
 type ExtractConfig<T> = T extends (config?: infer C) => unknown ? C : never
-type ExtractWith<T> = T extends { with?: infer W } ? W : never
+type ExtractWith<T> = T extends {
+	with?: infer W
+}
+	? W
+	: never
 
 // ---------------------------------------------------------------------------
 // Option types
@@ -163,7 +168,18 @@ export interface UpdateByIdOptions<
 	TReturning extends ReturningColumns<TTable> | undefined = undefined,
 	TWith = Record<string, unknown>,
 > {
+	/**
+	 * Version the caller read before deciding the update — enables optimistic
+	 * locking.
+	 *
+	 * The write only lands while the row still carries this version, and bumps
+	 * it on success. A concurrent writer that got there first makes this update
+	 * fail with `ConcurrentUpdateError` instead of silently overwriting it.
+	 */
+	expectedVersion?: number
 	returning?: TReturning
+	/** Column holding the row version. Defaults to `'version'`. */
+	versionColumn?: string
 	with?: TWith
 }
 
@@ -209,9 +225,7 @@ export interface TableRepositoryMethods<
 		options?: FindByIdOptions<TTable, TWith>,
 	): Promise<InferSelectModel<TTable> | undefined>
 
-	create<
-		TReturning extends ReturningColumns<TTable> | undefined = undefined,
-	>(
+	create<TReturning extends ReturningColumns<TTable> | undefined = undefined>(
 		data: CreateInput<TTable>,
 		options?: CreateOptions<TTable, TReturning, TWith>,
 	): Promise<InferReturning<TTable, TReturning>>
@@ -220,12 +234,12 @@ export interface TableRepositoryMethods<
 		TReturning extends ReturningColumns<TTable> | undefined = undefined,
 	>(
 		data: CreateInput<TTable>[],
-		options?: { returning?: TReturning },
+		options?: {
+			returning?: TReturning
+		},
 	): Promise<InferReturning<TTable, TReturning>[]>
 
-	update<
-		TReturning extends ReturningColumns<TTable> | undefined = undefined,
-	>(
+	update<TReturning extends ReturningColumns<TTable> | undefined = undefined>(
 		options: UpdateOptions<TTable, TReturning>,
 	): Promise<InferReturning<TTable, TReturning>[]>
 
@@ -237,9 +251,7 @@ export interface TableRepositoryMethods<
 		options?: UpdateByIdOptions<TTable, TReturning, TWith>,
 	): Promise<InferReturning<TTable, TReturning>>
 
-	delete<
-		TReturning extends ReturningColumns<TTable> | undefined = undefined,
-	>(
+	delete<TReturning extends ReturningColumns<TTable> | undefined = undefined>(
 		options: DeleteOptions<TTable, TReturning>,
 	): Promise<InferReturning<TTable, TReturning>[]>
 
@@ -249,9 +261,7 @@ export interface TableRepositoryMethods<
 
 	exists(options: ExistsOptions<TTable>): Promise<boolean>
 
-	upsert<
-		TReturning extends ReturningColumns<TTable> | undefined = undefined,
-	>(
+	upsert<TReturning extends ReturningColumns<TTable> | undefined = undefined>(
 		options: UpsertOptions<TTable, TReturning, TWith>,
 	): Promise<InferReturning<TTable, TReturning>>
 }
@@ -264,23 +274,22 @@ export type FullTableRepository<
 	TDb,
 	TName extends string,
 	TTable extends Table,
-> = TDb extends { query: infer Q }
+> = TDb extends {
+	query: infer Q
+}
 	? TName extends keyof Q
 		? Q[TName] extends {
 				findMany: infer FM
 				findFirst: infer FF
 			}
-			? TableRepositoryMethods<
-					TTable,
-					ExtractWith<ExtractConfig<FF>>
-				> & { findMany: FM; findFirst: FF }
+			? TableRepositoryMethods<TTable, ExtractWith<ExtractConfig<FF>>> & {
+					findMany: FM
+					findFirst: FF
+				}
 			: TableRepositoryMethods<TTable>
 		: TableRepositoryMethods<TTable>
 	: TableRepositoryMethods<TTable>
 
-export type InferRepositories<
-	TDb,
-	TSchema extends Record<string, Table>,
-> = {
+export type InferRepositories<TDb, TSchema extends Record<string, Table>> = {
 	[K in keyof TSchema & string]: FullTableRepository<TDb, K, TSchema[K]>
 }

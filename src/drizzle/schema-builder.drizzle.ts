@@ -16,13 +16,18 @@ const tableBuilder = {
 	table<TColumns extends Record<string, ColumnBuilderBase>>(
 		columns: TColumns,
 	): ColumnMap<TColumns> {
-		return { __columns: columns }
+		return {
+			__columns: columns,
+		}
 	},
 }
 
 export function createSchemaBuilder(): PgSchemaBuilder {
 	const { pgTable: _pgTable, ...pgColumns } = pgCore
-	return { ...tableBuilder, ...pgColumns } as PgSchemaBuilder
+	return {
+		...tableBuilder,
+		...pgColumns,
+	} as PgSchemaBuilder
 }
 
 function createTable(
@@ -68,7 +73,6 @@ export function materializeSchema(
 export type MaterializeSchemaWithRelations<
 	TTableResult extends SchemaResolverResult,
 	TRelationsResult extends RelationsResolverResult | undefined,
-> = MaterializeSchema<TTableResult> &
-	(TRelationsResult extends RelationsResolverResult
-		? TRelationsResult
-		: Record<string, never>)
+> = TRelationsResult extends RelationsResolverResult
+	? MaterializeSchema<TTableResult> & TRelationsResult
+	: MaterializeSchema<TTableResult>
