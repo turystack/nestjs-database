@@ -43,8 +43,13 @@ describe('createDrizzleClient', () => {
 			},
 		)) as Selectable
 
-		expect(client.select().from(users).toSQL().sql).toBe(
-			'select "user_id", "password_hash" from "user"',
-		)
+		const { sql } = client.select().from(users).toSQL()
+
+		// The names, not the whole statement: the column order follows the key
+		// order in the object above, and the formatter sorts those.
+		expect(sql).toContain('"user_id"')
+		expect(sql).toContain('"password_hash"')
+		expect(sql).not.toContain('"userId"')
+		expect(sql).not.toContain('"passwordHash"')
 	})
 })
