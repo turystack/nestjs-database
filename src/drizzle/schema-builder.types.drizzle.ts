@@ -41,7 +41,10 @@ import type * as PgCore from 'drizzle-orm/pg-core'
  * A wrong column name here is not a compile error; it fails loudly at
  * `drizzle-kit generate`, which is the moment the key is resolved.
  */
-export type SchemaTables = Record<string, PgCore.PgTable>
+export type SchemaTables = Record<
+	string,
+	PgCore.PgTable & Record<string, PgCore.PgColumn>
+>
 
 export type TableConstraints<
 	TColumns extends Record<string, ColumnBuilderBase>,
