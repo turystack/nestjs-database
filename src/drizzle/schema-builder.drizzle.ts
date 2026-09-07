@@ -6,19 +6,30 @@ import type {
 import * as pgCore from 'drizzle-orm/pg-core'
 
 import type {
+	AnyTableConstraints,
 	ColumnMap,
 	PgSchemaBuilder,
 	RelationsResolverResult,
 	SchemaResolverResult,
+	TableConstraints,
 } from '@/drizzle/schema-builder.types.drizzle.js'
 
 const tableBuilder = {
 	table<TColumns extends Record<string, ColumnBuilderBase>>(
 		columns: TColumns,
+		constraints?: TableConstraints<TColumns>,
 	): ColumnMap<TColumns> {
-		return {
-			__columns: columns,
-		}
+		// The key is only present when there is something to store: the column
+		// map is an opaque container, and an always-present `undefined` would
+		// show up in every snapshot of it.
+		return constraints
+			? {
+					__columns: columns,
+					__constraints: constraints,
+				}
+			: {
+					__columns: columns,
+				}
 	},
 }
 
@@ -33,10 +44,15 @@ export function createSchemaBuilder(): PgSchemaBuilder {
 function createTable(
 	tableName: string,
 	columns: Record<string, unknown>,
+	constraints?: AnyTableConstraints,
 ): Table {
+	// Drizzle's third argument is the only place a unique index, a partial
+	// index or a check can be declared. Passing `undefined` for a table that
+	// declares none keeps the call identical to what it was before.
 	return pgCore.pgTable(
 		tableName,
 		columns as Record<string, pgCore.PgColumnBuilderBase>,
+		constraints as never,
 	)
 }
 
@@ -65,7 +81,7 @@ export function materializeSchema(
 	return Object.fromEntries(
 		Object.entries(resolverResult).map(([tableName, columnMap]) => [
 			tableName,
-			createTable(tableName, columnMap.__columns),
+			createTable(tableName, columnMap.__columns, columnMap.__constraints),
 		]),
 	)
 }

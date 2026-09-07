@@ -1,4 +1,5 @@
-import { getTableColumns, getTableName } from 'drizzle-orm'
+import { getTableColumns, getTableName, sql } from 'drizzle-orm'
+import { getTableConfig } from 'drizzle-orm/pg-core'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -31,6 +32,28 @@ describe('createSchemaBuilder', () => {
 			'id',
 		])
 	})
+
+	it('should keep the container free of a constraints key when none are given', () => {
+		const schema = createSchemaBuilder()
+
+		// A table with no constraints is the common case, and an
+		// always-present `undefined` would appear in every snapshot of the map.
+		expect(
+			'__constraints' in
+				schema.table({
+					id: schema.uuid().primaryKey(),
+				}),
+		).toBe(false)
+	})
+
+	it('should expose the constraint builders, which live beside the columns', () => {
+		const schema = createSchemaBuilder()
+
+		expect(typeof schema.uniqueIndex).toBe('function')
+		expect(typeof schema.index).toBe('function')
+		expect(typeof schema.unique).toBe('function')
+		expect(typeof schema.check).toBe('function')
+	})
 })
 
 describe('materializeSchema', () => {
@@ -58,5 +81,86 @@ describe('materializeSchema', () => {
 			'id',
 			'title',
 		])
+	})
+})
+
+/**
+ * The third argument of `pgTable`.
+ *
+ * It was not passed through at all, so a generated schema could declare a
+ * column and nothing else: no `unique(organization_id, slug)`, no partial
+ * index, no check. Every scoped uniqueness rule the modelling law requires was
+ * unexpressable, and the omission was silent — the table built fine, just
+ * without the constraint.
+ */
+describe('table constraints', () => {
+	it('carries a unique index through to the built table', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			workspaces: schema.table(
+				{
+					organizationId: schema.uuid().notNull(),
+					slug: schema.text().notNull(),
+					workspaceId: schema.uuid().primaryKey(),
+				},
+				(table) => [
+					schema
+						.uniqueIndex('workspace_organization_slug')
+						.on(table.organizationId, table.slug),
+				],
+			),
+		})
+
+		const [index] = getTableConfig(tables.workspaces).indexes
+
+		expect(index?.config.name).toBe('workspace_organization_slug')
+		expect(index?.config.unique).toBe(true)
+		expect(
+			index?.config.columns.map((column) =>
+				'name' in column ? column.name : undefined,
+			),
+		).toEqual([
+			'organizationId',
+			'slug',
+		])
+	})
+
+	it('carries a partial unique index, which is how one default per parent is stated', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			workspaces: schema.table(
+				{
+					isDefault: schema.boolean().notNull(),
+					organizationId: schema.uuid().notNull(),
+					workspaceId: schema.uuid().primaryKey(),
+				},
+				(table) => [
+					schema
+						.uniqueIndex('workspace_one_default')
+						.on(table.organizationId)
+						.where(sql`is_default`),
+				],
+			),
+		})
+
+		const [index] = getTableConfig(tables.workspaces).indexes
+
+		expect(index?.config.name).toBe('workspace_one_default')
+		expect(index?.config.where).toBeDefined()
+	})
+
+	it('leaves a table with no constraints exactly as it was', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			users: schema.table({
+				userId: schema.uuid().primaryKey(),
+			}),
+		})
+
+		expect(getTableConfig(tables.users).indexes).toEqual([])
+		expect(getTableName(tables.users)).toBe('users')
 	})
 })
