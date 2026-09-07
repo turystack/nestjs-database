@@ -2,7 +2,7 @@
 	"name": "@turystack/nestjs-database",
 	"description": "Typed database module for NestJS: schema builder, per-table repositories, and transactional decorator. PostgreSQL (Drizzle) and DynamoDB adapters.",
 	"private": false,
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"type": "module",
 	"packageManager": "pnpm@10.12.3",
 	"sideEffects": false,
