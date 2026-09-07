@@ -164,3 +164,31 @@ describe('table constraints', () => {
 		expect(getTableName(tables.users)).toBe('users')
 	})
 })
+
+describe('table naming', () => {
+	it('names the table in snake case while the accessor stays camel case', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			userSocialIdentity: schema.table({
+				userSocialIdentityId: schema.uuid().primaryKey(),
+			}),
+		})
+
+		// The key is the accessor a repository is reached by; the name is what
+		// psql shows. Drizzle's `casing` converts the columns and not this.
+		expect(getTableName(tables.userSocialIdentity)).toBe('user_social_identity')
+	})
+
+	it('leaves a name that is already one word alone', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			user: schema.table({
+				userId: schema.uuid().primaryKey(),
+			}),
+		})
+
+		expect(getTableName(tables.user)).toBe('user')
+	})
+})

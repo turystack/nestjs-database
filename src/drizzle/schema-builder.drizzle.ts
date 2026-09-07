@@ -41,6 +41,19 @@ export function createSchemaBuilder(): PgSchemaBuilder {
 	} as PgSchemaBuilder
 }
 
+/**
+ * `userSocialIdentity` → `user_social_identity`.
+ *
+ * Drizzle's `casing` option converts column names and leaves the table name as
+ * the literal string it was given — so without this the database ended up half
+ * converted: `user_id` inside `userSocialIdentity`. The resolver key stays camel
+ * case, because it is also the accessor (`db.userSocialIdentity`); only the name
+ * SQL sees changes.
+ */
+function snakeCase(name: string): string {
+	return name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+}
+
 function createTable(
 	tableName: string,
 	columns: Record<string, unknown>,
@@ -50,7 +63,7 @@ function createTable(
 	// index or a check can be declared. Passing `undefined` for a table that
 	// declares none keeps the call identical to what it was before.
 	return pgCore.pgTable(
-		tableName,
+		snakeCase(tableName),
 		columns as Record<string, pgCore.PgColumnBuilderBase>,
 		constraints as never,
 	)
