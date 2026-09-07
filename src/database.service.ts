@@ -7,7 +7,12 @@ import type {
 } from '@/database.types.js'
 import { getCurrentTx } from '@/transaction.context.js'
 
+// The merge is the point. The constructor installs one repository per schema
+// table, so the property names exist only at runtime; the interface below is
+// how they become `db.users` at compile time. Biome cannot tell a merge that
+// documents dynamic assignment from one that hides an uninitialised field.
 @Injectable()
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: the repositories are assigned in the constructor, and the interface is what names them.
 export class DatabaseService {
 	private readonly _db: unknown
 
