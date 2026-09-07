@@ -5,6 +5,10 @@ import type {
 	RelationsResolverResult,
 	SchemaResolverResult,
 } from '@/drizzle/schema-builder.types.drizzle.js'
+import type {
+	DynamoSchemaBuilder,
+	DynamoSchemaResolverResult,
+} from '@/dynamodb/schema-builder.types.dynamodb.js'
 
 /**
  * Identity helper that preserves the inferred schema type of a resolver.
@@ -57,5 +61,33 @@ export function defineDatabaseRelations<
 	tables: MaterializeSchema<ReturnType<TSchemaResolver>>,
 	helpers: RelationsHelpers,
 ) => TRelations {
+	return resolver
+}
+
+/**
+ * The DynamoDB counterpart of {@link defineDatabaseSchema}.
+ *
+ * Separate rather than overloaded because the two builders have nothing in
+ * common: one hands out column types, the other hands out attribute types plus
+ * the key paths a read may take.
+ *
+ * @example
+ * ```ts
+ * export const databaseSchema = defineDynamoDatabaseSchema((t) => ({
+ *   auditEvents: t.table({
+ *     attributes: {
+ *       occurredAt: t.string(),
+ *       organizationId: t.string(),
+ *     },
+ *     key: { partition: 'organizationId', sort: 'occurredAt' },
+ *   }),
+ * }))
+ * ```
+ */
+export function defineDynamoDatabaseSchema<
+	TResult extends DynamoSchemaResolverResult,
+>(
+	resolver: (schema: DynamoSchemaBuilder) => TResult,
+): (schema: DynamoSchemaBuilder) => TResult {
 	return resolver
 }

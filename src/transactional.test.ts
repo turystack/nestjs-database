@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
 	getCurrentTx,
-	registerDb,
+	registerEngine,
 	transactionStorage,
-} from '@/drizzle/transaction-context.drizzle.js'
-import { Transactional } from '@/drizzle/transactional.drizzle.js'
+} from '@/transaction.context.js'
+import { Transactional } from '@/transactional.js'
+
+import { createPostgresqlAdapter } from '@/drizzle/postgresql.adapter.js'
 
 const FAKE_TX = {
 	tx: true,
@@ -36,12 +38,25 @@ class OrderService {
 	}
 }
 
-describe('transaction context', () => {
-	it('should throw from getDb before any module registered a db', async () => {
-		vi.resetModules()
-		const { getDb } = await import('@/drizzle/transaction-context.drizzle.js')
+function registerFakeEngine(db: { transaction: unknown }): void {
+	registerEngine({
+		adapter: createPostgresqlAdapter({
+			adapter: 'postgresql',
+			postgresql: {
+				url: 'postgres://unused',
+			},
+			schemaResolver: () => ({}),
+		}),
+		client: db,
+	})
+}
 
-		expect(() => getDb()).toThrow('db not initialized')
+describe('transaction context', () => {
+	it('should throw from getDb before any module registered an engine', async () => {
+		vi.resetModules()
+		const { getDb } = await import('@/transaction.context.js')
+
+		expect(() => getDb()).toThrow('engine not initialized')
 	})
 
 	it('should return undefined from getCurrentTx outside a transaction', () => {
@@ -56,7 +71,7 @@ describe('Transactional', () => {
 
 	it('should run the method inside a new transaction', async () => {
 		const db = createFakeDb()
-		registerDb(db as never)
+		registerFakeEngine(db as never)
 		const service = new OrderService()
 
 		const result = await service.place()
@@ -68,7 +83,7 @@ describe('Transactional', () => {
 
 	it('should pass the isolation level to the transaction', async () => {
 		const db = createFakeDb()
-		registerDb(db as never)
+		registerFakeEngine(db as never)
 		const service = new OrderService()
 
 		await service.placeSerializable()
@@ -80,7 +95,7 @@ describe('Transactional', () => {
 
 	it('should reuse the surrounding transaction instead of opening a new one', async () => {
 		const db = createFakeDb()
-		registerDb(db as never)
+		registerFakeEngine(db as never)
 		const service = new OrderService()
 		const outerTx = {
 			outer: true,

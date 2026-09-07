@@ -1,20 +1,31 @@
+import type { IsolationLevel, TransactionOptions } from '@/database.types.js'
 import {
 	type AfterCommitHook,
 	afterCommitStorage,
 	type BeforeCommitHook,
 	beforeCommitStorage,
 	getCurrentTx,
-	getDb,
+	getEngine,
 	transactionStateStorage,
 	transactionStorage,
-} from '@/drizzle/transaction-context.drizzle.js'
+} from '@/transaction.context.js'
 
-export type IsolationLevel =
-	| 'read uncommitted'
-	| 'read committed'
-	| 'repeatable read'
-	| 'serializable'
+export type { IsolationLevel } from '@/database.types.js'
 
+/**
+ * Runs the method inside one transaction.
+ *
+ * The propagation is "join or start": a call that already has a transaction in
+ * flight reuses it, so a use case calling another use case commits once. There
+ * are no savepoints and no `REQUIRES_NEW`.
+ *
+ * What a transaction *is* belongs to the engine, not here — this asks the
+ * registered adapter's strategy to run the work, so an engine that assembles an
+ * atomic batch instead of holding an open handle needs no change on this side.
+ *
+ * `isolationLevel` is honoured by engines that have one and refused by engines
+ * that do not, at registration rather than silently.
+ */
 export function Transactional(isolationLevel?: IsolationLevel) {
 	return (
 		_target: object,
@@ -30,14 +41,7 @@ export function Transactional(isolationLevel?: IsolationLevel) {
 				return original.apply(this, args)
 			}
 
-			const db = getDb() as {
-				transaction: (
-					fn: (tx: unknown) => Promise<unknown>,
-					config?: {
-						isolationLevel?: string
-					},
-				) => Promise<unknown>
-			}
+			const engine = getEngine()
 
 			const before: BeforeCommitHook[] = []
 			const after: AfterCommitHook[] = []
@@ -56,7 +60,14 @@ export function Transactional(isolationLevel?: IsolationLevel) {
 				return value
 			}
 
-			const result = await db.transaction(
+			const options: TransactionOptions | undefined = isolationLevel
+				? {
+						isolationLevel,
+					}
+				: undefined
+
+			const result = await engine.adapter.transaction.run(
+				engine.client,
 				(tx: unknown) =>
 					transactionStorage.run(tx, () =>
 						transactionStateStorage.run(state, () =>
@@ -65,11 +76,7 @@ export function Transactional(isolationLevel?: IsolationLevel) {
 							),
 						),
 					),
-				isolationLevel
-					? {
-							isolationLevel,
-						}
-					: undefined,
+				options,
 			)
 
 			// The data is durable at this point. A hook failing here cannot undo

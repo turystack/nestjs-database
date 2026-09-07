@@ -1,20 +1,21 @@
 import { Injectable } from '@nestjs/common'
-import type { Table } from 'drizzle-orm'
 
+import type { IDatabaseAdapter } from '@/database.adapter.interface.js'
 import type {
 	ResolvedDatabase,
 	ResolvedRepositories,
 } from '@/database.types.js'
-
-import { getCurrentTx } from '@/drizzle/transaction-context.drizzle.js'
-import { TableRepository } from '@/repository/table-repository.js'
+import { getCurrentTx } from '@/transaction.context.js'
 
 @Injectable()
-// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: dynamic repository augmentation via module declaration merging
 export class DatabaseService {
 	private readonly _db: unknown
 
-	constructor(db: unknown, schema: Record<string, Table>) {
+	constructor(
+		adapter: IDatabaseAdapter,
+		db: unknown,
+		schema: Record<string, unknown>,
+	) {
 		this._db = db
 
 		for (const [tableName, table] of Object.entries(schema)) {
@@ -23,11 +24,11 @@ export class DatabaseService {
 					`[DatabaseModule] table name "${tableName}" is reserved by DatabaseService`,
 				)
 			}
-			;(this as Record<string, unknown>)[tableName] = new TableRepository(
-				() => this.raw,
-				tableName,
+			;(this as Record<string, unknown>)[tableName] = adapter.createRepository({
+				getClient: () => this.raw,
 				table,
-			)
+				tableName,
+			})
 		}
 	}
 

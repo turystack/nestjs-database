@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
 	onAfterCommit,
 	onBeforeCommit,
-	registerDb,
-} from '@/drizzle/transaction-context.drizzle.js'
-import { Transactional } from '@/drizzle/transactional.drizzle.js'
+	registerEngine,
+} from '@/transaction.context.js'
+import { Transactional } from '@/transactional.js'
+
+import { createPostgresqlAdapter } from '@/drizzle/postgresql.adapter.js'
 
 /** Minimal drizzle stand-in: `transaction` runs the callback and "commits". */
 function createDb(options?: { failCommit?: boolean }) {
@@ -30,12 +32,25 @@ function createDb(options?: { failCommit?: boolean }) {
 		}),
 	}
 
-	registerDb(db as never)
+	registerFakeEngine(db as never)
 
 	return {
 		committed,
 		db,
 	}
+}
+
+function registerFakeEngine(db: { transaction: unknown }): void {
+	registerEngine({
+		adapter: createPostgresqlAdapter({
+			adapter: 'postgresql',
+			postgresql: {
+				url: 'postgres://unused',
+			},
+			schemaResolver: () => ({}),
+		}),
+		client: db,
+	})
 }
 
 describe('onBeforeCommit', () => {

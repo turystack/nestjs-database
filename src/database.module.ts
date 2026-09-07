@@ -1,21 +1,64 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common'
 import { ConfigService } from '@turystack/nestjs-config'
-import { relations as drizzleRelations } from 'drizzle-orm'
 
-import { DATABASE_SERVICE } from '@/database.constants.js'
-import { DatabaseService } from '@/database.service.js'
-import type { DatabaseModuleOptions } from '@/database.types.js'
-
-import { createDrizzleClient } from '@/drizzle/client.drizzle.js'
+import type { IDatabaseAdapter } from '@/database.adapter.interface.js'
 import {
-	createSchemaBuilder,
-	materializeSchema,
-} from '@/drizzle/schema-builder.drizzle.js'
+	DATABASE_ADAPTER,
+	DATABASE_MODULE_OPTIONS,
+	DATABASE_SERVICE,
+} from '@/database.constants.js'
+import { DatabaseService } from '@/database.service.js'
+import type {
+	DatabaseAdapterName,
+	DatabaseModuleOptions,
+} from '@/database.types.js'
+import { registerEngine } from '@/transaction.context.js'
+
 import type {
 	RelationsResolverResult,
 	SchemaResolverResult,
 } from '@/drizzle/schema-builder.types.drizzle.js'
-import { registerDb } from '@/drizzle/transaction-context.drizzle.js'
+
+/**
+ * The engine registry.
+ *
+ * A record keyed by adapter rather than a `switch`, so a new engine is an entry
+ * instead of an edit to the branch that already serves the others (`ADP-5`).
+ * The mapped type is what narrows the options per key: the PostgreSQL factory
+ * cannot be handed the DynamoDB block by accident.
+ */
+type AdapterFactories = {
+	[K in DatabaseAdapterName]: (
+		options: Extract<
+			DatabaseModuleOptions,
+			{
+				adapter: K
+			}
+		>,
+	) => Promise<IDatabaseAdapter>
+}
+
+/**
+ * Each entry imports its own engine, and only when that engine is the one
+ * chosen. A static import here would put both drivers in every consumer's
+ * module graph, which is how an "optional" peer quietly becomes required.
+ */
+const ADAPTERS: AdapterFactories = {
+	dynamodb: async (options) => {
+		const { createDynamodbAdapter } = await import(
+			'@/dynamodb/dynamodb.adapter.js'
+		)
+
+		return createDynamodbAdapter(options)
+	},
+	postgresql: async (options) => {
+		const { createPostgresqlAdapter } = await import(
+			'@/drizzle/postgresql.adapter.js'
+		)
+
+		return createPostgresqlAdapter(options)
+	},
+}
 
 @Module({})
 export class DatabaseModule {
@@ -31,11 +74,32 @@ export class DatabaseModule {
 			exports: [
 				DatabaseService,
 				DATABASE_SERVICE,
+				DATABASE_ADAPTER,
 			],
 			global: true,
 			module: DatabaseModule,
 			providers: DatabaseModule._resolveProviders(options),
 		}
+	}
+
+	private static async _createAdapter(
+		options: DatabaseModuleOptions,
+	): Promise<IDatabaseAdapter> {
+		// Indexing the record with a union gives a function whose parameter is the
+		// intersection of every arm, which is `never`. The cast is confined to
+		// this line; what protects the arms is the mapped type on ADAPTERS, where
+		// each factory is still declared against its own options.
+		const factory = ADAPTERS[options.adapter] as
+			| ((options: DatabaseModuleOptions) => Promise<IDatabaseAdapter>)
+			| undefined
+
+		if (!factory) {
+			throw new Error(
+				`[DatabaseModule] unknown adapter "${options.adapter}" — known adapters: ${Object.keys(ADAPTERS).join(', ')}`,
+			)
+		}
+
+		return factory(options)
 	}
 
 	private static _resolveOptions<
@@ -76,37 +140,32 @@ export class DatabaseModule {
 						token: ConfigService,
 					},
 				],
+				provide: DATABASE_MODULE_OPTIONS,
+				useFactory: (config?: ConfigService) =>
+					DatabaseModule._resolveOptions(optionsOrFactory, config),
+			},
+			{
+				inject: [
+					DATABASE_MODULE_OPTIONS,
+				],
+				provide: DATABASE_ADAPTER,
+				useFactory: (options: DatabaseModuleOptions) =>
+					DatabaseModule._createAdapter(options),
+			},
+			{
+				inject: [
+					DATABASE_ADAPTER,
+				],
 				provide: DatabaseService,
-				useFactory: async (config?: ConfigService) => {
-					const options = DatabaseModule._resolveOptions(
-						optionsOrFactory,
-						config,
-					)
-					const tables = materializeSchema(
-						options.schemaResolver(createSchemaBuilder()),
-					)
+				useFactory: async (adapter: IDatabaseAdapter) => {
+					const { client, tables } = await adapter.initialize()
 
-					let fullSchema: Record<string, unknown> = {
-						...tables,
-					}
+					registerEngine({
+						adapter,
+						client,
+					})
 
-					if (options.relationsResolver) {
-						const relationsResult = options.relationsResolver(tables as never, {
-							relations: drizzleRelations,
-						})
-						fullSchema = {
-							...tables,
-							...relationsResult,
-						}
-					}
-
-					const db = await createDrizzleClient(
-						options as DatabaseModuleOptions,
-						fullSchema,
-					)
-					registerDb(db)
-
-					return new DatabaseService(db, tables)
+					return new DatabaseService(adapter, client, tables)
 				},
 			},
 			{

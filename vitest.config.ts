@@ -9,6 +9,9 @@ export default defineConfig({
 		},
 	},
 	test: {
+		// The e2e suite needs Docker and has its own config; `pnpm test` must not
+		// pick it up and fail on a machine that never started a container.
+		exclude: ['**/*.e2e.test.ts'],
 		coverage: {
 			exclude: ['**/*.test.ts', '**/index.ts'],
 			include: ['**/*.ts'],

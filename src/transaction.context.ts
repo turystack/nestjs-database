@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
+import type { IDatabaseAdapter } from '@/database.adapter.interface.js'
 import type { ResolvedDatabase } from '@/database.types.js'
 
 export const transactionStorage = new AsyncLocalStorage<ResolvedDatabase>()
@@ -103,18 +104,37 @@ export function onAfterCommit(hook: AfterCommitHook): boolean {
 	return true
 }
 
-let _db: ResolvedDatabase | undefined
-
-export function registerDb(db: ResolvedDatabase): void {
-	_db = db
+/**
+ * The engine, reachable without injection.
+ *
+ * `@Transactional` is a bare method decorator: it has no constructor and no
+ * container, so this is how it finds the connection. Keeping the adapter here
+ * rather than the raw client is what lets the decorator stay engine-agnostic —
+ * it asks the adapter how a transaction runs instead of assuming the client
+ * has a `.transaction()`.
+ */
+type RegisteredEngine = {
+	adapter: IDatabaseAdapter
+	client: unknown
 }
 
-export function getDb(): ResolvedDatabase {
-	if (!_db) {
+let _engine: RegisteredEngine | undefined
+
+export function registerEngine(engine: RegisteredEngine): void {
+	_engine = engine
+}
+
+export function getEngine(): RegisteredEngine {
+	if (!_engine) {
 		throw new Error(
-			'[DatabaseModule] db not initialized — was DatabaseModule.register() called?',
+			'[DatabaseModule] engine not initialized — was DatabaseModule.register() called?',
 		)
 	}
 
-	return _db
+	return _engine
+}
+
+/** The connection, outside any transaction. */
+export function getDb(): ResolvedDatabase {
+	return getEngine().client as ResolvedDatabase
 }

@@ -2,9 +2,18 @@ import { pgTable, text, uuid } from 'drizzle-orm/pg-core'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DatabaseService } from '@/database.service.js'
+import { transactionStorage } from '@/transaction.context.js'
 
-import { transactionStorage } from '@/drizzle/transaction-context.drizzle.js'
+import { createPostgresqlAdapter } from '@/drizzle/postgresql.adapter.js'
 import { TableRepository } from '@/repository/table-repository.js'
+
+const adapter = createPostgresqlAdapter({
+	adapter: 'postgresql',
+	postgresql: {
+		url: 'postgres://unused',
+	},
+	schemaResolver: () => ({}),
+})
 
 const users = pgTable('users', {
 	id: uuid('id').primaryKey(),
@@ -20,7 +29,7 @@ function createService() {
 			},
 		},
 	}
-	const service = new DatabaseService(db, {
+	const service = new DatabaseService(adapter, db, {
 		users,
 	}) as DatabaseService & {
 		users: TableRepository
@@ -58,6 +67,7 @@ describe('DatabaseService', () => {
 		expect(
 			() =>
 				new DatabaseService(
+					adapter,
 					{},
 					{
 						raw: users,

@@ -1,0 +1,40 @@
+# The two engines this package supports, for the end-to-end tests.
+#
+# Lives in this package, not in the workspace root: each library is its own git
+# repository, so a root-level file would ship with none of them and would be
+# invisible to this package's CI.
+#
+# Only `*.e2e.test.ts` needs them — `pnpm test` stays fast and Docker-free.
+# Both ports are shifted so a Postgres or a DynamoDB Local already running is
+# not shadowed.
+#
+#   pnpm services:up
+#   pnpm test:e2e
+#   pnpm services:down
+
+name: turystack-nestjs-database
+
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:2.5.2
+    # In-memory: a suite that starts from an empty region is a suite whose
+    # failures are about the code and not about what the last run left behind.
+    command: ['-jar', 'DynamoDBLocal.jar', '-inMemory', '-sharedDb']
+    ports:
+      - '8100:8000'
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: turystack_test
+      POSTGRES_PASSWORD: turystack
+      POSTGRES_USER: turystack
+    ports:
+      - '5442:5432'
+    # The container is up before the server accepts connections; without this
+    # the first test races Postgres's own startup.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U turystack -d turystack_test']
+      interval: 2s
+      timeout: 3s
+      retries: 15

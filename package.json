@@ -1,6 +1,6 @@
 {
 	"name": "@turystack/nestjs-database",
-	"description": "Typed database module for NestJS: schema builder, per-table repositories, and transactional decorator. PostgreSQL (Drizzle) built-in.",
+	"description": "Typed database module for NestJS: schema builder, per-table repositories, and transactional decorator. PostgreSQL (Drizzle) and DynamoDB adapters.",
 	"private": false,
 	"version": "1.0.0",
 	"type": "module",
@@ -13,6 +13,16 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
+		},
+		"./postgresql": {
+			"types": "./dist/postgresql.d.ts",
+			"import": "./dist/postgresql.js",
+			"default": "./dist/postgresql.js"
+		},
+		"./dynamodb": {
+			"types": "./dist/dynamodb.d.ts",
+			"import": "./dist/dynamodb.js",
+			"default": "./dist/dynamodb.js"
 		}
 	},
 	"publishConfig": {
@@ -26,20 +36,25 @@
 	],
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-		"typecheck": "tsc --noEmit",
-		"test": "vitest run",
-		"test:cov": "vitest run --coverage",
-		"lint": "biome lint ./src",
-		"format": "biome format --write ./src",
 		"check": "biome check ./src",
 		"check:fix": "biome check --write ./src",
-		"prepack": "pnpm run build"
+		"format": "biome format --write ./src",
+		"lint": "biome lint ./src",
+		"prepack": "pnpm run build",
+		"services:down": "docker compose down -v",
+		"services:up": "docker compose up -d --wait",
+		"test": "vitest run",
+		"test:cov": "vitest run --coverage",
+		"test:e2e": "vitest run --config vitest.e2e.config.ts",
+		"typecheck": "tsc --noEmit"
 	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/turystack/nestjs-database.git"
 	},
 	"peerDependencies": {
+		"@aws-sdk/client-dynamodb": "^3.0.0",
+		"@aws-sdk/lib-dynamodb": "^3.0.0",
 		"@nestjs/common": "^11.0.0",
 		"@nestjs/core": "^11.0.0",
 		"@turystack/exceptions": "^1.0.0",
@@ -50,6 +65,15 @@
 		"uuidv7": "^1.2.1"
 	},
 	"peerDependenciesMeta": {
+		"@aws-sdk/client-dynamodb": {
+			"optional": true
+		},
+		"@aws-sdk/lib-dynamodb": {
+			"optional": true
+		},
+		"drizzle-orm": {
+			"optional": true
+		},
 		"pg": {
 			"optional": true
 		}
