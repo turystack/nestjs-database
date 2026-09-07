@@ -44,6 +44,32 @@ export {
 export type { IsolationLevel } from '@/transactional.js'
 export { Transactional } from '@/transactional.js'
 
+/**
+ * The names the three factories above return.
+ *
+ * They are exported for one reason: an application that declares its schema in
+ * a workspace package emits a `.d.ts` for it, and TypeScript refuses to write
+ * a declaration whose inferred type it cannot name (TS2883). Hiding these made
+ * every generated repository fail its own build.
+ *
+ * They are not meant to be written by hand. A signature that names
+ * `ColumnMap` or `DynamoTableMap` is a signature written against this
+ * package's internals; the schema is the one place these belong, and
+ * inference puts them there without anyone typing them.
+ */
+export type { MaterializeSchema } from '@/drizzle/schema-builder.drizzle.js'
+export type {
+	ColumnMap,
+	PgSchemaBuilder,
+	RelationsHelpers,
+} from '@/drizzle/schema-builder.types.drizzle.js'
+export type {
+	DynamoAttribute,
+	DynamoIndexes,
+	DynamoSchemaBuilder,
+	DynamoTableDefinition,
+	DynamoTableMap,
+} from '@/dynamodb/schema-builder.types.dynamodb.js'
 export {
 	RecordNotCreatedError,
 	RecordNotFoundError,
