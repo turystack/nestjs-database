@@ -11,6 +11,7 @@ import type {
 	PgSchemaBuilder,
 	RelationsResolverResult,
 	SchemaResolverResult,
+	SchemaTables,
 	TableConstraints,
 } from '@/drizzle/schema-builder.types.drizzle.js'
 
@@ -57,15 +58,23 @@ function snakeCase(name: string): string {
 function createTable(
 	tableName: string,
 	columns: Record<string, unknown>,
-	constraints?: AnyTableConstraints,
+	constraints: AnyTableConstraints | undefined,
+	tables: SchemaTables,
 ): Table {
 	// Drizzle's third argument is the only place a unique index, a partial
-	// index or a check can be declared. Passing `undefined` for a table that
-	// declares none keeps the call identical to what it was before.
+	// index, a check or a foreign key can be declared. Passing `undefined` for a
+	// table that declares none keeps the call identical to what it was before.
+	//
+	// `tables` is the map the loop below is still filling, and handing it over
+	// half-built is safe: drizzle evaluates this callback lazily, when the
+	// table's config is read, by which time every table is in it. That is what
+	// lets `membership` name `role` while `role` is still three keys away.
 	return pgCore.pgTable(
 		snakeCase(tableName),
 		columns as Record<string, pgCore.PgColumnBuilderBase>,
-		constraints as never,
+		(constraints
+			? (self: never) => constraints(self, tables)
+			: undefined) as never,
 	)
 }
 
@@ -91,12 +100,18 @@ export function materializeSchema<TResult extends SchemaResolverResult>(
 export function materializeSchema(
 	resolverResult: SchemaResolverResult,
 ): Record<string, Table> {
-	return Object.fromEntries(
-		Object.entries(resolverResult).map(([tableName, columnMap]) => [
+	const tables: Record<string, Table> = {}
+
+	for (const [tableName, columnMap] of Object.entries(resolverResult)) {
+		tables[tableName] = createTable(
 			tableName,
-			createTable(tableName, columnMap.__columns, columnMap.__constraints),
-		]),
-	)
+			columnMap.__columns,
+			columnMap.__constraints,
+			tables as SchemaTables,
+		)
+	}
+
+	return tables
 }
 
 export type MaterializeSchemaWithRelations<

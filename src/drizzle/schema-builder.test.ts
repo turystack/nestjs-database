@@ -192,3 +192,51 @@ describe('table naming', () => {
 		expect(getTableName(tables.user)).toBe('user')
 	})
 })
+
+describe('foreign keys', () => {
+	it('lets a table name one declared after it', () => {
+		const schema = createSchemaBuilder()
+
+		// `membership` points at `role`, which is two keys further down. The
+		// callback is evaluated when the config is read, not when the table is
+		// built, so the forward reference resolves.
+		const tables = materializeSchema({
+			membership: schema.table(
+				{
+					membershipId: schema.uuid().primaryKey(),
+					roleId: schema.uuid().notNull(),
+				},
+				(table, all) => [
+					schema.foreignKey({
+						columns: [
+							table.roleId,
+						],
+						foreignColumns: [
+							all.role.roleId,
+						],
+					}),
+				],
+			),
+			role: schema.table({
+				roleId: schema.uuid().primaryKey(),
+			}),
+		})
+
+		const [key] = getTableConfig(tables.membership).foreignKeys
+
+		expect(key).toBeDefined()
+		expect(getTableName(key?.reference().foreignTable as never)).toBe('role')
+	})
+
+	it('leaves a table with no foreign key without one', () => {
+		const schema = createSchemaBuilder()
+
+		const tables = materializeSchema({
+			role: schema.table({
+				roleId: schema.uuid().primaryKey(),
+			}),
+		})
+
+		expect(getTableConfig(tables.role).foreignKeys).toEqual([])
+	})
+})

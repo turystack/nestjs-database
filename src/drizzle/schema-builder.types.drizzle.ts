@@ -32,10 +32,22 @@ import type * as PgCore from 'drizzle-orm/pg-core'
  * )
  * ```
  */
+/**
+ * The materialized schema, as a constraint callback sees it.
+ *
+ * Loosely typed on purpose: a foreign key names another table, and that table's
+ * type is not known while the schema is still being declared — the schema's
+ * type would have to depend on the callbacks that depend on the schema's type.
+ * A wrong column name here is not a compile error; it fails loudly at
+ * `drizzle-kit generate`, which is the moment the key is resolved.
+ */
+export type SchemaTables = Record<string, PgCore.PgTable>
+
 export type TableConstraints<
 	TColumns extends Record<string, ColumnBuilderBase>,
 > = (
 	columns: BuildExtraConfigColumns<string, TColumns, 'pg'>,
+	tables: SchemaTables,
 ) => PgCore.PgTableExtraConfigValue[]
 
 /**
@@ -49,6 +61,7 @@ export type TableConstraints<
  */
 export type AnyTableConstraints = (
 	columns: never,
+	tables: SchemaTables,
 ) => PgCore.PgTableExtraConfigValue[]
 
 export type ColumnMap<TColumns extends Record<string, ColumnBuilderBase>> = {
